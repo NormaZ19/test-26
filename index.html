@@ -9,6 +9,11 @@
 body { margin:0; font-family:Arial; background:#0b1220; color:white; }
 h1 { text-align:center; padding:15px; }
 
+.topbar{
+  text-align:center;
+  padding:10px;
+}
+
 .container { display:flex; flex-wrap:wrap; gap:10px; padding:10px; justify-content:center; }
 
 .group {
@@ -48,6 +53,7 @@ button {
   border-radius:8px;
   min-width:220px;
 }
+
 .pick {
   cursor:pointer;
   padding:5px;
@@ -56,6 +62,11 @@ button {
   border-radius:5px;
 }
 .pick:hover { background:#34495e; }
+
+.counter {
+  font-size:18px;
+  margin-top:5px;
+}
 </style>
 </head>
 
@@ -63,9 +74,10 @@ button {
 
 <h1>2026 World Cup Predictor (48 Teams)</h1>
 
-<div style="text-align:center;">
-<button onclick="buildKnockout()">Generate Knockout</button>
-<button onclick="resetAll()">Reset</button>
+<div class="topbar">
+  <button onclick="buildKnockout()">Generate Knockout</button>
+  <button onclick="resetAll()">Reset</button>
+  <div class="counter" id="counter">Selected: 0 / 32</div>
 </div>
 
 <div class="container" id="groups"></div>
@@ -92,7 +104,16 @@ L:["英格兰","克罗地亚","加纳","巴拿马"]
 
 const groups = Object.keys(groupData);
 
-let state = {}; // group selections
+let state = {}; // selections
+
+function countSelected(){
+  let total = 0;
+  groups.forEach(g=>{
+    if(state[g]) total += state[g].size;
+  });
+  document.getElementById("counter").innerText = `Selected: ${total} / 32`;
+  return total;
+}
 
 function renderGroups(){
   const container = document.getElementById("groups");
@@ -110,9 +131,27 @@ function renderGroups(){
 
       el.onclick = () => {
         if(!state[g]) state[g] = new Set();
-        if(state[g].has(team)) state[g].delete(team);
-        else if(state[g].size < 2) state[g].add(team);
-        el.classList.toggle("selected");
+
+        if(state[g].has(team)){
+          state[g].delete(team);
+          el.classList.remove("selected");
+        } else {
+
+          if(state[g].size >= 3){
+            alert("Each group can only select 3 teams");
+            return;
+          }
+
+          if(countSelected() >= 32 && !state[g].has(team)){
+            alert("You already selected 32 teams");
+            return;
+          }
+
+          state[g].add(team);
+          el.classList.add("selected");
+        }
+
+        countSelected();
       };
 
       div.appendChild(el);
@@ -120,92 +159,63 @@ function renderGroups(){
 
     container.appendChild(div);
   });
+
+  countSelected();
 }
 
-function getGroupResults(){
-  let first = {};
-  let second = {};
-  let thirdPool = [];
-
-  groups.forEach(g => {
-    const teams = groupData[g];
-
-    const selected = state[g] ? Array.from(state[g]) : [];
-
-    let firstPick = selected[0] || teams[0];
-    let secondPick = selected[1] || teams[1];
-
-    first[g] = firstPick;
-    second[g] = secondPick;
-
-    teams.forEach(t => {
-      if(t !== firstPick && t !== secondPick){
-        thirdPool.push({group:g, team:t});
-      }
-    });
+function getSelectedTeams(){
+  let arr = [];
+  groups.forEach(g=>{
+    if(state[g]){
+      arr = arr.concat(Array.from(state[g]));
+    }
   });
-
-  return {first, second, thirdPool};
-}
-
-function pickThird(pool, allowedGroups){
-  const valid = pool.filter(x => allowedGroups.includes(x.group));
-  return valid[Math.floor(Math.random() * valid.length)].team;
+  return arr;
 }
 
 function buildKnockout(){
 
-  const {first, second, thirdPool} = getGroupResults();
+  const teams = getSelectedTeams();
+
+  if(teams.length !== 32){
+    alert("You must select exactly 32 teams to start knockout!");
+    return;
+  }
 
   const R = document.getElementById("knockout");
   R.innerHTML = "";
 
-  const pickMatch = (a,b,label,nextRound) => {
-    const div = document.createElement("div");
-    div.className = "match";
+  let round = teams;
+  let roundNum = 1;
 
-    div.innerHTML = `<b>${label}</b><br>`;
+  while(round.length > 1){
 
-    [a,b].forEach(team => {
-      const el = document.createElement("div");
-      el.className = "pick";
-      el.innerText = team;
-      el.onclick = () => {
-        nextRound.push(team);
-        div.innerHTML += `<br>✔ Winner: <b>${team}</b>`;
-      };
-      div.appendChild(el);
-    });
+    const next = [];
+    const box = document.createElement("div");
+    box.className = "match";
+    box.innerHTML = `<h3>Round ${roundNum}</h3>`;
 
-    R.appendChild(div);
-  };
+    for(let i=0;i<round.length;i+=2){
+      const a = round[i];
+      const b = round[i+1];
 
-  let R1 = [];
+      const winner = Math.random() > 0.5 ? a : b;
+      next.push(winner);
 
-  pickMatch(second["A"], second["B"], "A2 vs B2", R1);
-  pickMatch(first["E"], pickThird(thirdPool,["A","B","C","D","F"]), "E1 vs 3rd A/B/C/D/F", R1);
-  pickMatch(first["F"], second["C"], "F1 vs C2", R1);
-  pickMatch(first["C"], second["F"], "C1 vs F2", R1);
-  pickMatch(first["I"], pickThird(thirdPool,["C","D","F","G","H"]), "I1 vs 3rd C/D/F/G/H", R1);
-  pickMatch(second["E"], second["I"], "E2 vs I2", R1);
-  pickMatch(first["A"], pickThird(thirdPool,["C","E","F","H","I"]), "A1 vs 3rd C/E/F/H/I", R1);
-  pickMatch(first["L"], pickThird(thirdPool,["E","H","I","J","K"]), "L1 vs 3rd E/H/I/J/K", R1);
+      const line = document.createElement("div");
+      line.innerHTML = `${a} vs ${b} → <b>${winner}</b>`;
+      box.appendChild(line);
+    }
 
-  pickMatch(first["D"], pickThird(thirdPool,["B","E","F","I","J"]), "D1 vs 3rd B/E/F/I/J", R1);
-  pickMatch(first["G"], pickThird(thirdPool,["A","E","H","I","J"]), "G1 vs 3rd A/E/H/I/J", R1);
-  pickMatch(second["K"], second["L"], "K2 vs L2", R1);
-  pickMatch(first["H"], second["J"], "H1 vs J2", R1);
-  pickMatch(first["B"], pickThird(thirdPool,["E","F","G","I","J"]), "B1 vs 3rd E/F/G/I/J", R1);
-  pickMatch(first["J"], second["H"], "J1 vs H2", R1);
-  pickMatch(first["K"], pickThird(thirdPool,["D","E","I","J","L"]), "K1 vs 3rd D/E/I/J/L", R1);
-  pickMatch(second["D"], second["G"], "D2 vs G2", R1);
+    R.appendChild(box);
+    round = next;
+    roundNum++;
+  }
 
-  setTimeout(() => {
-    const final = document.createElement("h2");
-    final.style.textAlign = "center";
-    final.innerText = "🏆 Final Champion (click progression required)";
-    R.appendChild(final);
-  }, 500);
+  const final = document.createElement("h2");
+  final.style.textAlign = "center";
+  final.innerText = "🏆 Champion: " + round[0];
+  R.appendChild(final);
 }
 
 function resetAll(){
