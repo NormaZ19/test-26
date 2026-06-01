@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>World Cup 2026 Predictor</title>
+
+<style>
+body { margin:0; font-family:Arial; background:#0b1220; color:white; }
+h1 { text-align:center; padding:15px; }
+
+.container { display:flex; flex-wrap:wrap; gap:10px; padding:10px; justify-content:center; }
+
+.group {
+  background:#121a2a;
+  padding:10px;
+  border-radius:8px;
+  width:220px;
+}
+
+.team {
+  padding:6px;
+  margin:4px 0;
+  background:#1e2a44;
+  border-radius:5px;
+  cursor:pointer;
+}
+
+.team.selected { background:#2ecc71; }
+
+button {
+  padding:10px 15px;
+  margin:10px;
+  cursor:pointer;
+}
+
+.stage {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  padding:10px;
+  justify-content:center;
+}
+
+.match {
+  background:#121a2a;
+  padding:10px;
+  border-radius:8px;
+  min-width:220px;
+}
+.pick {
+  cursor:pointer;
+  padding:5px;
+  margin:4px 0;
+  background:#1e2a44;
+  border-radius:5px;
+}
+.pick:hover { background:#34495e; }
+</style>
+</head>
+
+<body>
+
+<h1>2026 World Cup Predictor (48 Teams)</h1>
+
+<div style="text-align:center;">
+<button onclick="buildKnockout()">Generate Knockout</button>
+<button onclick="resetAll()">Reset</button>
+</div>
+
+<div class="container" id="groups"></div>
+
+<h2 style="text-align:center;">Knockout Stage</h2>
+<div class="stage" id="knockout"></div>
+
+<script>
+
+const groupData = {
+A:["墨西哥","南非","韩国","捷克"],
+B:["加拿大","波黑","卡塔尔","瑞士"],
+C:["巴西","摩洛哥","海地","苏格兰"],
+D:["美国","巴拉圭","澳大利亚","土耳其"],
+E:["德国","库拉索","科特迪瓦","厄瓜多尔"],
+F:["荷兰","日本","瑞典","突尼斯"],
+G:["比利时","埃及","伊朗","新西兰"],
+H:["西班牙","佛得角","沙特阿拉伯","乌拉圭"],
+I:["法国","塞内加尔","伊拉克","挪威"],
+J:["阿根廷","阿尔及利亚","奥地利","约旦"],
+K:["葡萄牙","刚果（金）","乌兹别克斯坦","哥伦比亚"],
+L:["英格兰","克罗地亚","加纳","巴拿马"]
+};
+
+const groups = Object.keys(groupData);
+
+let state = {}; // group selections
+
+function renderGroups(){
+  const container = document.getElementById("groups");
+  container.innerHTML = "";
+
+  groups.forEach(g => {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.innerHTML = `<h3>Group ${g}</h3>`;
+
+    groupData[g].forEach(team => {
+      const el = document.createElement("div");
+      el.className = "team";
+      el.innerText = team;
+
+      el.onclick = () => {
+        if(!state[g]) state[g] = new Set();
+        if(state[g].has(team)) state[g].delete(team);
+        else if(state[g].size < 2) state[g].add(team);
+        el.classList.toggle("selected");
+      };
+
+      div.appendChild(el);
+    });
+
+    container.appendChild(div);
+  });
+}
+
+function getGroupResults(){
+  let first = {};
+  let second = {};
+  let thirdPool = [];
+
+  groups.forEach(g => {
+    const teams = groupData[g];
+
+    const selected = state[g] ? Array.from(state[g]) : [];
+
+    let firstPick = selected[0] || teams[0];
+    let secondPick = selected[1] || teams[1];
+
+    first[g] = firstPick;
+    second[g] = secondPick;
+
+    teams.forEach(t => {
+      if(t !== firstPick && t !== secondPick){
+        thirdPool.push({group:g, team:t});
+      }
+    });
+  });
+
+  return {first, second, thirdPool};
+}
+
+function pickThird(pool, allowedGroups){
+  const valid = pool.filter(x => allowedGroups.includes(x.group));
+  return valid[Math.floor(Math.random() * valid.length)].team;
+}
+
+function buildKnockout(){
+
+  const {first, second, thirdPool} = getGroupResults();
+
+  const R = document.getElementById("knockout");
+  R.innerHTML = "";
+
+  const pickMatch = (a,b,label,nextRound) => {
+    const div = document.createElement("div");
+    div.className = "match";
+
+    div.innerHTML = `<b>${label}</b><br>`;
+
+    [a,b].forEach(team => {
+      const el = document.createElement("div");
+      el.className = "pick";
+      el.innerText = team;
+      el.onclick = () => {
+        nextRound.push(team);
+        div.innerHTML += `<br>✔ Winner: <b>${team}</b>`;
+      };
+      div.appendChild(el);
+    });
+
+    R.appendChild(div);
+  };
+
+  let R1 = [];
+
+  pickMatch(second["A"], second["B"], "A2 vs B2", R1);
+  pickMatch(first["E"], pickThird(thirdPool,["A","B","C","D","F"]), "E1 vs 3rd A/B/C/D/F", R1);
+  pickMatch(first["F"], second["C"], "F1 vs C2", R1);
+  pickMatch(first["C"], second["F"], "C1 vs F2", R1);
+  pickMatch(first["I"], pickThird(thirdPool,["C","D","F","G","H"]), "I1 vs 3rd C/D/F/G/H", R1);
+  pickMatch(second["E"], second["I"], "E2 vs I2", R1);
+  pickMatch(first["A"], pickThird(thirdPool,["C","E","F","H","I"]), "A1 vs 3rd C/E/F/H/I", R1);
+  pickMatch(first["L"], pickThird(thirdPool,["E","H","I","J","K"]), "L1 vs 3rd E/H/I/J/K", R1);
+
+  pickMatch(first["D"], pickThird(thirdPool,["B","E","F","I","J"]), "D1 vs 3rd B/E/F/I/J", R1);
+  pickMatch(first["G"], pickThird(thirdPool,["A","E","H","I","J"]), "G1 vs 3rd A/E/H/I/J", R1);
+  pickMatch(second["K"], second["L"], "K2 vs L2", R1);
+  pickMatch(first["H"], second["J"], "H1 vs J2", R1);
+  pickMatch(first["B"], pickThird(thirdPool,["E","F","G","I","J"]), "B1 vs 3rd E/F/G/I/J", R1);
+  pickMatch(first["J"], second["H"], "J1 vs H2", R1);
+  pickMatch(first["K"], pickThird(thirdPool,["D","E","I","J","L"]), "K1 vs 3rd D/E/I/J/L", R1);
+  pickMatch(second["D"], second["G"], "D2 vs G2", R1);
+
+  setTimeout(() => {
+    const final = document.createElement("h2");
+    final.style.textAlign = "center";
+    final.innerText = "🏆 Final Champion (click progression required)";
+    R.appendChild(final);
+  }, 500);
+}
+
+function resetAll(){
+  state = {};
+  renderGroups();
+  document.getElementById("knockout").innerHTML = "";
+}
+
+renderGroups();
+
+</script>
+
+</body>
+</html>
